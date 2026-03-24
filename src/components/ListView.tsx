@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTaskContext } from '../context/TaskContext';
 import type { Status } from '../types';
@@ -14,6 +14,18 @@ export function ListView() {
   
   const [scrollTop, setScrollTop] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [containerHeight, setContainerHeight] = useState(600);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        setContainerHeight(entry.contentRect.height);
+      }
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   const sortedTasks = useMemo(() => {
     const sorted = [...filteredTasks];
@@ -37,13 +49,13 @@ export function ListView() {
   }, [filteredTasks, sortCol, sortDir]);
 
   const rowHeight = 49; 
-  const containerHeight = 600; 
   const visibleRowCount = Math.ceil(containerHeight / rowHeight); 
   const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - 5); 
   const endIndex = Math.min(sortedTasks.length - 1, Math.floor(scrollTop / rowHeight) + visibleRowCount + 5);
+  
   const visibleTasks = sortedTasks.slice(startIndex, endIndex + 1);
   const paddingTop = startIndex * rowHeight;
-  const paddingBottom = Math.max(0, (sortedTasks.length - 1 - endIndex) * rowHeight);
+  const totalHeight = sortedTasks.length * rowHeight;
 
   if (filteredTasks.length === 0) {
     return (
@@ -68,58 +80,56 @@ export function ListView() {
   };
 
   return (
-    <div ref={containerRef} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)} className="overflow-auto h-full border border-gray-200 rounded-lg bg-white relative">
-      <table className="w-full text-left border-collapse whitespace-nowrap">
-        <thead className="sticky top-0 bg-gray-50 z-10 border-b border-gray-200">
-          <tr>
-            <th className="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100" onClick={() => { setSortCol('title'); setSortDir(sortDir==='asc' ? 'desc' : 'asc'); }}>
-              Title {sortCol === 'title' && (sortDir === 'asc' ? '↑' : '↓')}
-            </th>
-            <th className="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Assignee</th>
-            <th className="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 text-center" onClick={() => { setSortCol('priority'); setSortDir(sortDir==='asc' ? 'desc' : 'asc'); }}>
-              Priority {sortCol === 'priority' && (sortDir === 'asc' ? '↑' : '↓')}
-            </th>
-            <th className="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Status</th>
-            <th className="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 text-right" onClick={() => { setSortCol('dueDate'); setSortDir(sortDir==='asc' ? 'desc' : 'asc'); }}>
-              Due Date {sortCol === 'dueDate' && (sortDir === 'asc' ? '↑' : '↓')}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {paddingTop > 0 && <tr style={{ height: paddingTop }}><td colSpan={5}></td></tr>}
-          {visibleTasks.map(task => (
-            <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50/50 group">
-              <td className="p-3 font-medium text-gray-900 text-[13px]">{task.title}</td>
-              <td className="p-3 text-center">
-                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 border border-gray-200 text-gray-600 text-[10px] font-semibold">
-                  {task.assignee}
-                </span>
-              </td>
-              <td className="p-3 text-center">
-                <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${getPriorityStyle(task.priority)}`}>
-                  {task.priority}
-                </span>
-              </td>
-              <td className="p-3 text-center">
-                <select 
-                  value={task.status}
-                  onChange={(e) => dispatch({ type: 'MOVE_TASK', payload: { taskId: task.id, newStatus: e.target.value as Status } })}
-                  className="bg-transparent font-medium border border-transparent hover:border-gray-200 hover:bg-white text-gray-700 text-[13px] rounded focus:ring-2 focus:ring-gray-800 outline-none cursor-pointer px-2 py-1 transition-all"
-                >
-                  <option value="To Do">To Do</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="In Review">In Review</option>
-                  <option value="Done">Done</option>
-                </select>
-              </td>
-              <td className={`p-3 text-right text-[13px] ${isOverdue(task.dueDate) ? 'text-red-500 font-medium' : 'text-gray-500'}`}>
-                {formatDueDate(task.dueDate)}
-              </td>
-            </tr>
-          ))}
-          {paddingBottom > 0 && <tr style={{ height: paddingBottom }}><td colSpan={5}></td></tr>}
-        </tbody>
-      </table>
+    <div 
+      ref={containerRef} 
+      onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)} 
+      className="overflow-y-auto h-full w-full border border-gray-200 rounded-lg bg-white relative"
+    >
+      <div className="sticky top-0 z-20 flex w-full bg-slate-50 border-b border-gray-200 shadow-sm text-xs font-semibold text-gray-500 uppercase tracking-wider min-w-[700px]">
+         <div className="w-[30%] p-3 cursor-pointer hover:bg-gray-100 flex items-center shrink-0" onClick={() => { setSortCol('title'); setSortDir(sortDir==='asc' ? 'desc' : 'asc'); }}>
+           Title {sortCol === 'title' && (sortDir === 'asc' ? '↑' : '↓')}
+         </div>
+         <div className="w-[15%] p-3 text-center flex items-center justify-center shrink-0">Assignee</div>
+         <div className="w-[15%] p-3 cursor-pointer hover:bg-gray-100 flex items-center justify-center shrink-0" onClick={() => { setSortCol('priority'); setSortDir(sortDir==='asc' ? 'desc' : 'asc'); }}>
+           Priority {sortCol === 'priority' && (sortDir === 'asc' ? '↑' : '↓')}
+         </div>
+         <div className="w-[20%] p-3 text-center flex items-center justify-center shrink-0">Status</div>
+         <div className="w-[20%] p-3 cursor-pointer hover:bg-gray-100 flex items-center justify-end text-right shrink-0" onClick={() => { setSortCol('dueDate'); setSortDir(sortDir==='asc' ? 'desc' : 'asc'); }}>
+           Due Date {sortCol === 'dueDate' && (sortDir === 'asc' ? '↑' : '↓')}
+         </div>
+      </div>
+
+      <div style={{ height: `${totalHeight}px`, position: 'relative', minWidth: '700px' }}>
+         <div style={{ position: 'absolute', top: `${paddingTop}px`, left: 0, right: 0 }}>
+            {visibleTasks.map(task => (
+               <div key={task.id} className="flex border-b border-gray-100 hover:bg-gray-50/50 bg-white group items-center" style={{ height: `${rowHeight}px` }}>
+                  <div className="w-[30%] p-3 font-medium text-gray-900 text-[13px] truncate shrink-0">{task.title}</div>
+                  <div className="w-[15%] p-3 flex items-center justify-center shrink-0">
+                     <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-gray-100 border border-gray-200 text-gray-600 text-[10px] font-semibold">{task.assignee}</span>
+                  </div>
+                  <div className="w-[15%] p-3 flex items-center justify-center shrink-0">
+                     <span className={`px-2 py-0.5 rounded text-[11px] font-medium border ${getPriorityStyle(task.priority)}`}>{task.priority}</span>
+                  </div>
+                  <div className="w-[20%] p-3 flex items-center justify-center shrink-0">
+                     <select 
+                        value={task.status}
+                        aria-label="Change task status"
+                        onChange={(e) => dispatch({ type: 'MOVE_TASK', payload: { taskId: task.id, newStatus: e.target.value as Status } })}
+                        className="bg-transparent font-medium border border-transparent hover:border-gray-200 hover:bg-white text-gray-700 text-[13px] rounded focus:ring-2 focus:ring-gray-800 outline-none cursor-pointer px-2 py-1 transition-all"
+                     >
+                        <option value="To Do">To Do</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="In Review">In Review</option>
+                        <option value="Done">Done</option>
+                     </select>
+                  </div>
+                  <div className={`w-[20%] p-3 text-right text-[13px] shrink-0 justify-end flex items-center ${isOverdue(task.dueDate) ? 'text-red-500 font-medium' : 'text-gray-500'}`}>
+                     {formatDueDate(task.dueDate)}
+                  </div>
+               </div>
+            ))}
+         </div>
+      </div>
     </div>
   );
 }
